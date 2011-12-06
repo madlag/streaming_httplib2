@@ -1,4 +1,4 @@
-0.7.1_streaming
+0.7.2 (streaming version)
     Changed behaviour to return file like object instead of strings for content.
     Changed cache to handle streaming too.
 
