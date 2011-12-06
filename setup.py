@@ -1,75 +1,40 @@
-from distutils.core import setup
-import sys
+#!/usr/bin/env python
+from setuptools import setup, find_packages
+import sys, os
 
-pkgdir = {'': 'python%s' % sys.version_info[0]}
-VERSION = '0.7.2'
+here = os.path.abspath(os.path.dirname(__file__))
+README = open(os.path.join(here, 'README')).read()
+NEWS = open(os.path.join(here, 'CHANGELOG')).read()
+
+
+version = '0.7.2'
+
+install_requires = [
+    # List your project dependencies here.
+    # For more details, see:
+    # http://packages.python.org/distribute/setuptools.html#declaring-dependencies
+]
+
 
 setup(name='streaming_httplib2',
-        version=VERSION, 
-        author='Joe Gregorio',
-        author_email='joe@bitworking.org',
-        url='https://github.com/madlag/streaming_httplib2', # original is http://code.google.com/p/httplib2/
-#        download_url='http://httplib2.googlecode.com/files/httplib2-%s.tar.gz' % VERSION,
-        description='A comprehensive HTTP client library modified to add response streaming support.',
-        license='MIT',
-        long_description="""
-
-A comprehensive HTTP client library, ``httplib2`` supports many features left out of other HTTP libraries.
-
-**HTTP and HTTPS**
-  HTTPS support is only available if the socket module was compiled with SSL support. 
- 
-
-**Keep-Alive**
-  Supports HTTP 1.1 Keep-Alive, keeping the socket open and performing multiple requests over the same connection if possible. 
-
-
-**Authentication**
-  The following three types of HTTP Authentication are supported. These can be used over both HTTP and HTTPS.
-
-  * Digest
-  * Basic
-  * WSSE
-
-**Caching**
-  The module can optionally operate with a private cache that understands the Cache-Control: 
-  header and uses both the ETag and Last-Modified cache validators. Both file system
-  and memcached based caches are supported.
-
-
-**All Methods**
-  The module can handle any HTTP request method, not just GET and POST.
-
-
-**Redirects**
-  Automatically follows 3XX redirects on GETs.
-
-
-**Compression**
-  Handles both 'deflate' and 'gzip' types of compression.
-
-
-**Lost update support**
-  Automatically adds back ETags into PUT requests to resources we have already cached. This implements Section 3.2 of Detecting the Lost Update Problem Using Unreserved Checkout
-
-
-**Unit Tested**
-  A large and growing set of unit tests.
-
-http://httplib2.googlecode.com/svn/trunk/#egg=httplib2-dev
-        """,
-        package_dir=pkgdir,
-        packages=['streaming_httplib2'],
-        package_data={'httplib2': ['*.txt']},
-        classifiers=[
-        'Development Status :: 4 - Beta',
-        'Environment :: Web Environment',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
-        'Topic :: Internet :: WWW/HTTP',
-        'Topic :: Software Development :: Libraries',
-        ],
-        )
+    version=version,
+    description="A comprehensive HTTP client library modified to add response streaming support.",
+    long_description=README + '\n\n' + NEWS,
+    classifiers=[
+      # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
+    ],
+    keywords='http streaming',
+    author='Joe Gregorio',
+    author_email='joe@bitworking.org',
+    url='https://github.com/madlag/streaming_httplib2',
+    license='MIT',
+    packages=find_packages("python2"),
+    package_dir = {'': 'python2'},
+    include_package_data=True,
+    zip_safe=False,
+    install_requires=install_requires,
+    entry_points={
+        'console_scripts':
+            ['streaming_httplib2=streaming_httplib2:main']
+    }
+)

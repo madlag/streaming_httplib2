@@ -16,7 +16,7 @@ __version__ = "0.1 ($Rev: 118 $)"
 
 
 import StringIO
-import stupeflix.webcache.httplib2_patched as httplib2
+import stupeflix.webcache.streaming_httplib2 as httplib2
 import os
 import socket
 import sys

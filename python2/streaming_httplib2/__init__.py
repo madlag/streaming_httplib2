@@ -55,7 +55,7 @@ from gettext import gettext as _
 import socket
 
 try:
-    from httplib2 import socks
+    from streaming_httplib2 import socks
 except ImportError:
     socks = None
 

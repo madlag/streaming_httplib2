@@ -7,9 +7,9 @@ import tempfile
 
 import nose
 
-import stupeflix.webcache.httplib2_patched as httplib2
-from stupeflix.webcache.httplib2_patched import socks
-from stupeflix.webcache.httplib2_patched.test import miniserver
+import stupeflix.webcache.streaming_httplib2 as httplib2
+from stupeflix.webcache.streaming_httplib2 import socks
+from stupeflix.webcache.streaming_httplib2.test import miniserver
 
 tinyproxy_cfg = """
 User "%(user)s"
