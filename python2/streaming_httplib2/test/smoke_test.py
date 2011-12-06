@@ -1,9 +1,9 @@
 import os
 import unittest
 
-import httplib2
+import stupeflix.webcache.httplib2_patched as httplib2
 
-from httplib2.test import miniserver
+from stupeflix.webcache.httplib2_patched.test import miniserver
 
 
 class HttpSmokeTest(unittest.TestCase):
@@ -17,7 +17,10 @@ class HttpSmokeTest(unittest.TestCase):
     def testGetFile(self):
         client = httplib2.Http()
         src = 'miniserver.py'
-        response, body = client.request('http://localhost:%d/%s' %
-                                        (self.port, src))
+        url = 'http://localhost:%d/%s' % (self.port, src)
+        response, body = client.request(url)
+
+        body = body.read()
+        
         self.assertEqual(response.status, 200)
         self.assertEqual(body, open(os.path.join(miniserver.HERE, src)).read())

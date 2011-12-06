@@ -4,13 +4,13 @@ import sys
 pkgdir = {'': 'python%s' % sys.version_info[0]}
 VERSION = '0.7.2'
 
-setup(name='httplib2',
+setup(name='streaming_httplib2',
         version=VERSION, 
         author='Joe Gregorio',
         author_email='joe@bitworking.org',
-        url='http://code.google.com/p/httplib2/',
-        download_url='http://httplib2.googlecode.com/files/httplib2-%s.tar.gz' % VERSION,
-        description='A comprehensive HTTP client library.',
+        url='https://github.com/madlag/streaming-httplib2', # original is http://code.google.com/p/httplib2/
+#        download_url='http://httplib2.googlecode.com/files/httplib2-%s.tar.gz' % VERSION,
+        description='A comprehensive HTTP client library modified to add response streaming support.',
         license='MIT',
         long_description="""
 
@@ -59,8 +59,8 @@ A comprehensive HTTP client library, ``httplib2`` supports many features left ou
 http://httplib2.googlecode.com/svn/trunk/#egg=httplib2-dev
         """,
         package_dir=pkgdir,
-        packages=['httplib2'],
-        package_data={'httplib2': ['*.txt']},
+        packages=['streaming_httplib2'],
+        package_data={'streaming_httplib2': ['*.txt']},
         classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',

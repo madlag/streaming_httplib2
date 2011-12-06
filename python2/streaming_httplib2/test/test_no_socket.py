@@ -6,7 +6,7 @@ import os
 import sys
 import unittest
 
-import httplib2
+import stupeflix.webcache.httplib2_patched as httplib2
 
 class MissingSocketTest(unittest.TestCase):
     def setUp(self):

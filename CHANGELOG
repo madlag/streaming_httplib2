@@ -1,3 +1,7 @@
+0.7.1_streaming
+    Changed behaviour to return file like object instead of strings for content.
+    Changed cache to handle streaming too.
+
 0.7.1
     Fix failure to install cacerts.txt for 2.x installs.
 

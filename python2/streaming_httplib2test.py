@@ -16,9 +16,7 @@ __version__ = "0.1 ($Rev: 118 $)"
 
 
 import StringIO
-import base64
-import httplib
-import httplib2
+import stupeflix.webcache.httplib2_patched as httplib2
 import os
 import socket
 import sys
@@ -180,7 +178,7 @@ class HttpTest(unittest.TestCase):
         self.http.force_exception_to_status_code = False 
         response, content = self.http.request("http://bitworking.org", connection_type=_MyHTTPConnection)
         self.assertEqual(response['content-location'], "http://bitworking.org")
-        self.assertEqual(content, "the body")
+        self.assertEqual(content.read(), "the body")
 
     def testGetUnknownServer(self):
         self.http.force_exception_to_status_code = False 
@@ -195,7 +193,7 @@ class HttpTest(unittest.TestCase):
 
         (response, content) = self.http.request("http://fred.bitworking.org/")
         self.assertEqual(response['content-type'], 'text/plain')
-        self.assertTrue(content.startswith("Unable to find"))
+        self.assertTrue(content.read().startswith("Unable to find"))
         self.assertEqual(response.status, 400)
 
     def testGetConnectionRefused(self):
@@ -211,7 +209,7 @@ class HttpTest(unittest.TestCase):
 
         (response, content) = self.http.request("http://localhost:7777/")
         self.assertEqual(response['content-type'], 'text/plain')
-        self.assertTrue("Connection refused" in content)
+        self.assertTrue("Connection refused" in content.read())
         self.assertEqual(response.status, 400)
 
     def testGetIRI(self):
@@ -243,7 +241,7 @@ class HttpTest(unittest.TestCase):
         uri = "http://www.google.com/"
         (response, content) = self.http.request(uri, "HEAD")
         self.assertEqual(response.status, 200)
-        self.assertEqual(content, "")
+        self.assertEqual(content.read(), "")
 
     def testGetNoCache(self):
         # Test that can do a GET w/o the cache turned on.
@@ -284,7 +282,7 @@ class HttpTest(unittest.TestCase):
         uri = urlparse.urljoin(base, "user-agent/test.cgi")
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
-        self.assertTrue(content.startswith("Python-httplib2/"))
+        self.assertTrue(content.read().startswith("Python-httplib2/"))
 
     def testUserAgentNonDefault(self):
         # Test that the default user-agent can be over-ridden
@@ -292,21 +290,21 @@ class HttpTest(unittest.TestCase):
         uri = urlparse.urljoin(base, "user-agent/test.cgi")
         (response, content) = self.http.request(uri, "GET", headers={'User-Agent': 'fred/1.0'})
         self.assertEqual(response.status, 200)
-        self.assertTrue(content.startswith("fred/1.0"))
+        self.assertTrue(content.read().startswith("fred/1.0"))
 
     def testGet300WithLocation(self):
         # Test the we automatically follow 300 redirects if a Location: header is provided
         uri = urlparse.urljoin(base, "300/with-location-header.asis")
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 300)
         self.assertEqual(response.previous.fromcache, False)
 
         # Confirm that the intermediate 300 is not cached
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 300)
         self.assertEqual(response.previous.fromcache, False)
 
@@ -335,14 +333,14 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertTrue(response.has_key('content-location'))
         self.assertEqual(response['content-location'], destination)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 301)
         self.assertEqual(response.previous.fromcache, False)
 
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
         self.assertEqual(response['content-location'], destination)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 301)
         self.assertEqual(response.previous.fromcache, True)
 
@@ -368,12 +366,13 @@ class HttpTest(unittest.TestCase):
     def testGet302(self):
         # Test that we automatically follow 302 redirects
         # and that we DO NOT cache the 302 response
+        # NB LAGUNAS : YOU CAN ACTUALLY CACHE THE 302 response if specified
         uri = urlparse.urljoin(base, "302/onestep.asis")
         destination = urlparse.urljoin(base, "302/final-destination.txt")
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
         self.assertEqual(response['content-location'], destination)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 302)
         self.assertEqual(response.previous.fromcache, False)
 
@@ -382,7 +381,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(response.fromcache, True)
         self.assertEqual(response['content-location'], destination)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 302)
         self.assertEqual(response.previous.fromcache, False)
         self.assertEqual(response.previous['content-location'], uri)
@@ -392,7 +391,7 @@ class HttpTest(unittest.TestCase):
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
         self.assertEqual(response.fromcache, True)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 302)
         self.assertEqual(response.previous.fromcache, False)
 
@@ -418,7 +417,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(response.status, 500)
         self.assertTrue(response.reason.startswith("Redirected more"))
         self.assertEqual("302", response['status'])
-        self.assertTrue(content.startswith("<html>"))
+        self.assertTrue(content.read().startswith("<html>"))
         self.assertTrue(response.previous != None)
 
     def testGet302NoLocation(self):
@@ -441,7 +440,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(response.status, 500)
         self.assertTrue(response.reason.startswith("Redirected but"))
         self.assertEqual("302", response['status'])
-        self.assertTrue(content.startswith("This is content"))
+        self.assertTrue(content.read().startswith("This is content"))
 
     def testGet301ViaHttps(self):
         # Google always redirects to https://www.google.com
@@ -540,7 +539,7 @@ class HttpTest(unittest.TestCase):
         uri = urlparse.urljoin(base, "303/303.cgi")
         (response, content) = self.http.request(uri, "POST", " ")
         self.assertEqual(response.status, 200)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 303)
 
     def testGet303NoRedirect(self):
@@ -650,14 +649,14 @@ class HttpTest(unittest.TestCase):
         uri = urlparse.urljoin(base, "307/onestep.asis")
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 307)
         self.assertEqual(response.previous.fromcache, False)
 
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
         self.assertEqual(response.fromcache, True)
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
         self.assertEqual(response.previous.status, 307)
         self.assertEqual(response.previous.fromcache, False)
 
@@ -757,7 +756,7 @@ class HttpTest(unittest.TestCase):
         (response, content) = self.http.request(uri, "HEAD")
         self.assertEqual(response.status, 200)
         self.assertNotEqual(int(response['content-length']), 0)
-        self.assertEqual(content, "")
+        self.assertEqual(content.read(), "")
 
     def testGetGZip(self):
         # Test that we support gzip compression
@@ -767,7 +766,7 @@ class HttpTest(unittest.TestCase):
         self.assertFalse(response.has_key('content-encoding'))
         self.assertTrue(response.has_key('-content-encoding'))
         self.assertEqual(int(response['content-length']), len("This is the final destination.\n"))
-        self.assertEqual(content, "This is the final destination.\n")
+        self.assertEqual(content.read(), "This is the final destination.\n")
 
     def testPostAndGZipResponse(self):
         uri = urlparse.urljoin(base, "gzip/post.cgi")
@@ -807,7 +806,7 @@ class HttpTest(unittest.TestCase):
         (response, content) = self.http.request(uri)
         self.assertEqual(response.status, 408)
         self.assertTrue(response.reason.startswith("Request Timeout"))
-        self.assertTrue(content.startswith("Request Timeout"))
+        self.assertTrue(content.read().startswith("Request Timeout"))
 
     def testIndividualTimeout(self):
         uri = urlparse.urljoin(base, "timeout/timeout.cgi")
@@ -817,7 +816,7 @@ class HttpTest(unittest.TestCase):
         (response, content) = http.request(uri)
         self.assertEqual(response.status, 408)
         self.assertTrue(response.reason.startswith("Request Timeout"))
-        self.assertTrue(content.startswith("Request Timeout"))
+        self.assertTrue(content.read().startswith("Request Timeout"))
 
 
     def testHTTPSInitTimeout(self):
@@ -831,7 +830,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertFalse(response.has_key('content-encoding'))
         self.assertEqual(int(response['content-length']), len("This is the final destination."))
-        self.assertEqual(content, "This is the final destination.")
+        self.assertEqual(content.read(), "This is the final destination.")
 
     def testGetDeflateFailure(self):
         # Test that we raise a good exception when the deflate fails
@@ -858,7 +857,7 @@ class HttpTest(unittest.TestCase):
         uri = urlparse.urljoin(base, "duplicate-headers/multilink.asis")
         (response, content) = self.http.request(uri, "GET")
         self.assertEqual(response.status, 200)
-        self.assertEqual(content, "This is content\n")
+        self.assertEqual(content.read(), "This is content\n")
         self.assertEqual(response['link'].split(",")[0], '<http://bitworking.org>; rel="home"; title="BitWorking"')
 
     def testGetCacheControlNoCache(self):
@@ -1143,7 +1142,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
 
     def reflector(self, content):
-        return  dict( [tuple(x.split("=", 1)) for x in content.strip().split("\n")] )
+        return  dict( [tuple(x.split("=", 1)) for x in content.read().strip().split("\n")] )
 
     def testReflector(self):
         uri = urlparse.urljoin(base, "reflector/reflector.cgi")

@@ -329,7 +329,6 @@ def _entry_disposition(response_headers, request_headers):
     max-age
     min-fresh
     """
-
     retval = "STALE"
     cc = _parse_cache_control(request_headers)
     cc_response = _parse_cache_control(response_headers)
@@ -348,6 +347,7 @@ def _entry_disposition(response_headers, request_headers):
         date = calendar.timegm(email.Utils.parsedate_tz(response_headers['date']))
         now = time.time()
         current_age = max(0, now - date)
+
         if cc_response.has_key('max-age'):
             try:
                 freshness_lifetime = int(cc_response['max-age'])
@@ -372,8 +372,10 @@ def _entry_disposition(response_headers, request_headers):
             except ValueError:
                 min_fresh = 0
             current_age += min_fresh
+
         if freshness_lifetime > current_age:
             retval = "FRESH"
+
     return retval
 
 def _decompressContent(response, new_content):
@@ -382,19 +384,21 @@ def _decompressContent(response, new_content):
         encoding = response.get('content-encoding', None)
         if encoding in ['gzip', 'deflate']:
             if encoding == 'gzip':
-                content = gzip.GzipFile(fileobj=StringIO.StringIO(new_content)).read()
+                content = gzip.GzipFile(fileobj=StringIO.StringIO(new_content.read())).read()
             if encoding == 'deflate':
-                content = zlib.decompress(content)
+                content = zlib.decompress(content.read())
             response['content-length'] = str(len(content))
             # Record the historical presence of the encoding in a way the won't interfere.
             response['-content-encoding'] = response['content-encoding']
             del response['content-encoding']
+            content = StringIO.StringIO(content)
     except IOError:
-        content = ""
+        content = StringIO.StringIO("")
         raise FailedToDecompressContent(_("Content purported to be compressed with %s but failed to decompress.") % response.get('content-encoding'), response, content)
     return content
 
 def _updateCache(request_headers, response_headers, content, cache, cachekey):
+    retval = content
     if cachekey:
         cc = _parse_cache_control(request_headers)
         cc_response = _parse_cache_control(response_headers)
@@ -427,9 +431,11 @@ def _updateCache(request_headers, response_headers, content, cache, cachekey):
             header_str = info.as_string()
 
             header_str = re.sub("\r(?!\n)|(?<!\r)\n", "\r\n", header_str)
-            text = "".join([status_header, header_str, content])
+            text = "".join([status_header, header_str])
 
-            cache.set(cachekey, text)
+            retval = cache.set(cachekey, text, content)
+            
+    return retval
 
 def _cnonce():
     dig = _md5("%s:%s" % (time.ctime(), ["0123456789"[random.randrange(0, 9)] for i in range(20)])).hexdigest()
@@ -690,18 +696,25 @@ class FileCache(object):
         retval = None
         cacheFullPath = os.path.join(self.cache, self.safe(key))
         try:
-            f = file(cacheFullPath, "rb")
-            retval = f.read()
-            f.close()
+            retval = file(cacheFullPath, "rb")
         except IOError:
             pass
         return retval
 
-    def set(self, key, value):
+    def set(self, key, header, content):
         cacheFullPath = os.path.join(self.cache, self.safe(key))
         f = file(cacheFullPath, "wb")
-        f.write(value)
+        f.write(header)
+        while True:
+            c = content.read(8192)
+            if len(c) == 0 or c == None:
+                break
+            f.write(c)
+            
         f.close()
+        f = open(cacheFullPath)
+        f.read(len(header))
+        return f
 
     def delete(self, key):
         cacheFullPath = os.path.join(self.cache, self.safe(key))
@@ -1173,11 +1186,11 @@ and more.
                 else:
                     raise
             else:
-                content = ""
+                content = StringIO.StringIO("")
                 if method == "HEAD":
                     response.close()
                 else:
-                    content = response.read()
+                    content = response
                 response = Response(response)
                 if method != "HEAD":
                     content = _decompressContent(response, content)
@@ -1228,7 +1241,12 @@ and more.
                         response['-x-permanent-redirect-url'] = response['location']
                         if not response.has_key('content-location'):
                             response['content-location'] = absolute_uri
-                        _updateCache(headers, response, content, self.cache, cachekey)
+                        content = _updateCache(headers, response, content, self.cache, cachekey)
+                    if response.status == 302 and method in ["GET", "HEAD"]:
+                        if not response.has_key('content-location'):
+                            response['content-location'] = absolute_uri
+                        content = _updateCache(headers, response, content, self.cache, cachekey)
+
                     if headers.has_key('if-none-match'):
                         del headers['if-none-match']
                     if headers.has_key('if-modified-since'):
@@ -1250,9 +1268,33 @@ and more.
                 # Don't cache 206's since we aren't going to handle byte range requests
                 if not response.has_key('content-location'):
                     response['content-location'] = absolute_uri
-                _updateCache(headers, response, content, self.cache, cachekey)
+                content = _updateCache(headers, response, content, self.cache, cachekey)
 
         return (response, content)
+
+    def _cache_value_info_read(self, cached_value):
+        read = 0
+        MAX_HEADER_SIZE = 1024 * 1024
+        info = ""
+        while len(info) < MAX_HEADER_SIZE:
+            last_chars = info[-4:]
+            # Small speedup
+            if "\r" not in last_chars and "\n" not in last_chars:
+                add = cached_value.read(4)
+            else:
+                add = cached_value.read(1)
+
+            if len(add) == 0 or add == None:
+                break
+            info += add
+
+            if info[-4:] == "\r\n\r\n":
+                break
+
+        if len(info) >= 4:
+            return info[:-4]
+        else:
+            return info
 
     def _normalize_headers(self, headers):
         return _normalize_headers(headers)
@@ -1344,7 +1386,8 @@ a string that contains the response entity body.
                     # to fix the non-existent bug not fixed in this
                     # bug report: http://mail.python.org/pipermail/python-bugs-list/2005-September/030289.html
                     try:
-                        info, content = cached_value.split('\r\n\r\n', 1)
+                        info = self._cache_value_info_read(cached_value)
+                        content = cached_value
                         feedparser = email.FeedParser.FeedParser()
                         feedparser.feed(info)
                         info = feedparser.close()
@@ -1398,11 +1441,13 @@ a string that contains the response entity body.
                     if entry_disposition == "FRESH":
                         if not cached_value:
                             info['status'] = '504'
-                            content = ""
+                            content = StringIO.StringIO("")
                         response = Response(info)
                         if cached_value:
                             response.fromcache = True
-                        return (response, content)
+
+                        if response.status not in [302]:
+                            return (response, content)
 
                     if entry_disposition == "STALE":
                         if info.has_key('etag') and not self.ignore_etag and not 'if-none-match' in headers:
@@ -1425,10 +1470,11 @@ a string that contains the response entity body.
                     merged_response = Response(info)
                     if hasattr(response, "_stale_digest"):
                         merged_response._stale_digest = response._stale_digest
-                    _updateCache(headers, merged_response, content, self.cache, cachekey)
+                    # TEMPORARY LAGUNAS : DO NOT UPDATE CACHE
+#                    _updateCache(headers, merged_response, content, self.cache, cachekey)
                     response = merged_response
                     response.status = 200
-                    response.fromcache = True
+                    response.fromcache = True                    
 
                 elif response.status == 200:
                     content = new_content
@@ -1440,7 +1486,7 @@ a string that contains the response entity body.
                 if cc.has_key('only-if-cached'):
                     info['status'] = '504'
                     response = Response(info)
-                    content = ""
+                    content = StringIO.StringIO("")
                 else:
                     (response, content) = self._request(conn, authority, uri, request_uri, method, body, headers, redirections, cachekey)
         except Exception, e:
@@ -1457,6 +1503,7 @@ a string that contains the response entity body.
                             "status": "408",
                             "content-length": len(content)
                             })
+                    content = StringIO.StringIO(content)
                     response.reason = "Request Timeout"
                 else:
                     content = str(e)
@@ -1465,6 +1512,7 @@ a string that contains the response entity body.
                             "status": "400",
                             "content-length": len(content)
                             })
+                    content = StringIO.StringIO(content)
                     response.reason = "Bad Request"
             else:
                 raise
