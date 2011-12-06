@@ -2,9 +2,13 @@ Httplib2
 
 --------------------------------------------------------------------
 This is a modified version of the original httplib2 library
-to support streaming of large http response, instead of loading them 
+to support streaming of large http responses, instead of loading them 
 into memory as in the original library.
 See CHANGELOG for more information.
+
+The package can be installed throught pip:
+
+ pip install streaming_httplib2
 
 --------------------------------------------------------------------
 Introduction
