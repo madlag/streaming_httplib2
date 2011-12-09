@@ -2,9 +2,6 @@ import streaming_httplib2 as httplib2
 import time
 import os
 import re
-import socket
-import string
-import traceback
 import errno
 import threading
 import fcntl
@@ -33,9 +30,10 @@ a multi-machine web cache can be created easily.
 
 def urlopen(url, cache_dir, path_schema = [(0,2), (2,4)]):
     """Open a single url, a return the response info and content stream.
-       For path_schema documentation, see below, in DistributedFileCache constructor."""
+       For path_schema documentation, see below, in DistributedFileCache constructor.
+       Be careful, ssl_certificate_validation is disactivated."""
     c = DistributedFileCache(cache_dir, path_schema = path_schema)
-    h = httplib2.Http(c)        
+    h = httplib2.Http(c, disable_ssl_certificate_validation = True)
     resp, content = h.request(url)
     c.cleanup()        
     return resp, content
@@ -103,7 +101,7 @@ class DistributedFileCache(httplib2.FileCache):
 
     def report_error(self, message, exc_info = True):
         "Report an error"
-        logger.info("webcache: " + message, exc_info=exc_info)        
+        logger.error("cache: " + message, exc_info=exc_info)
 
     def create_dirs_(self, base, path_schema):
         "Initialize the directory tree recursively"        
@@ -117,9 +115,14 @@ class DistributedFileCache(httplib2.FileCache):
                 raise
 
         if len(path_schema) > 0:
-            count = 16 ** (path_schema[0][1] - path_schema[0][0])
+            char_count = path_schema[0][1] - path_schema[0][0]
+            count = 16 ** char_count
             for i in range(count):
-                subpath = os.path.join(base, hex(i)[2:])
+                key = hex(i)[2:]
+                while len(key) < char_count:
+                    key = "0" + key
+
+                subpath = os.path.join(base, key)
                 self.create_dirs_(subpath, path_schema[1:])
         
     def create_dirs(self):     
@@ -175,7 +178,6 @@ class DistributedFileCache(httplib2.FileCache):
         """Get the content of the cache.
         If no content was found, then create a exclusively locked file, so somebody trying just after that will wait until I finish.
         If some content was found, then try to "shared lock" the file, wait for the lock if needed, then return the content of the file"""
-        retval = None
         cache_full_path = self.cache_path(key)
 
         # Try to acquire the lock. It its succeeds, it means that the file did not exist, so that the cache was empty
@@ -202,10 +204,14 @@ class DistributedFileCache(httplib2.FileCache):
                 try:
                     # Try to lock the file, and then unlock it
                     fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    size = os.fstat(fd).st_size
+                    if size == 0:
+                        OK = False                        
                     # No unlock as we keep the file open to return it to the caller
 #                    fcntl.flock(fd, fcntl.LOCK_UN) 
                     # We succeeded locking the file !
-                    OK = True
+                    else:
+                        OK = True
                     break
                 except IOError, e:
                     # IF the error is "would block", this is just a sign that the file is still locked by someone else
@@ -252,36 +258,51 @@ class DistributedFileCache(httplib2.FileCache):
 
         return None
 
-    def release_ex_lock(self, filename, headers = None, content = None):
+    def release_ex_lock(self, cache_full_path, headers = None, content = None):
         """Write to the cache file and release the exclusive lock."""
-        if filename not in self.exclusive_locks and (headers != None or content != None):
+        if cache_full_path not in self.exclusive_locks and (headers != None or content != None):
             # We did not have locked the file => we unlink it, and try to acquire a exclusive lock on the new one
             try:
-                os.unlink(filename)
+                os.unlink(cache_full_path)
             except:
-                self.report_error("Unknown error unlinking file %s." % filename)
+                self.report_error("Unknown error unlinking file %s." % cache_full_path)
                 raise
                 
-            self.acquire_ex_lock(filename)
+            self.acquire_ex_lock(cache_full_path)
 
         fd = None
         self.lock.acquire()
         try:            
 
-            if filename in self.exclusive_locks:
-                fd = self.exclusive_locks[filename]["fd"]
+            if cache_full_path in self.exclusive_locks:
+                fd = self.exclusive_locks[cache_full_path]["fd"]
                 if headers != None:
                     os.write(fd, headers)
                 if content != None:
-                    total = self.write_content(filename, fd, content)
+                    self.write_content(cache_full_path, fd, content)
 
                 fcntl.flock(fd, fcntl.LOCK_UN)
-                del self.exclusive_locks[filename]
+                del self.exclusive_locks[cache_full_path]
             else:
-                raise Exception("Invalid setting the cache without locking it first.")
-        except Exception, e:
-            self.report_error("Error while writing cache file %s." % filename)
+                if headers != None or content != None:
+                    raise Exception("Invalid setting the cache without locking it first.")
+        except:
+            self.report_error("Error while writing cache file %s." % cache_full_path)
             raise
+            if fd != None:
+                os.ftruncate(fd, 0)
+            try:
+                os.unlink(cache_full_path)
+            except:
+                pass
+            try:
+                if fd != None:
+                    os.close(fd)
+            except:
+                pass
+
+            if cache_full_path in self.exclusive_locks:
+                del self.exclusive_locks[cache_full_path]
         finally:
             self.lock.release()
         return fd

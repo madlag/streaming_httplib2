@@ -42,6 +42,15 @@ import calendar
 import time
 import random
 import errno
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+
+def report_error(message, exc_info = True):
+    "Report an error"
+    logger.error("streaming_httplib2: " + message, exc_info=exc_info)
+
 # remove depracated warning in python2.6
 try:
     from hashlib import sha1 as _sha, md5 as _md5
@@ -426,12 +435,13 @@ def _updateCache(request_headers, response_headers, content, cache, cachekey):
             if status == 304:
                 status = 200
 
-            status_header = 'status: %d\r\n' % status
+            status_header = 'status: %d\n' % status
 
-            header_str = info.as_string()
-
-            header_str = re.sub("\r(?!\n)|(?<!\r)\n", "\r\n", header_str)
+            header_str = ""
+            for key in info.keys():
+                header_str += key + ": " + info[key] + "\n"
             text = "".join([status_header, header_str])
+            text += "\r\n\r\n"
 
             retval = cache.set(cachekey, text, content)
             
@@ -797,12 +807,12 @@ class HTTPConnectionWithTimeout(httplib.HTTPConnection):
                     self.sock.settimeout(self.timeout)
                     # End of difference from httplib.
                 if self.debuglevel > 0:
-                    print "connect: (%s, %s)" % (self.host, self.port)
+                    report_error("connect: (%s, %s)" % (self.host, self.port))
 
                 self.sock.connect(sa)
             except socket.error, msg:
                 if self.debuglevel > 0:
-                    print 'connect fail:', (self.host, self.port)
+                    report_error('connect fail:', (self.host, self.port))
                 if self.sock:
                     self.sock.close()
                 self.sock = None
@@ -905,7 +915,7 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
                     sock, self.key_file, self.cert_file,
                     self.disable_ssl_certificate_validation, self.ca_certs)
                 if self.debuglevel > 0:
-                    print "connect: (%s, %s)" % (self.host, self.port)
+                    report_error("connect: (%s, %s)" % (self.host, self.port))
                 if not self.disable_ssl_certificate_validation:
                     cert = self.sock.getpeercert()
                     hostname = self.host.split(':', 0)[0]
@@ -931,7 +941,7 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
               raise
             except socket.error, msg:
               if self.debuglevel > 0:
-                  print 'connect fail:', (self.host, self.port)
+                  report_error('connect fail:', (self.host, self.port))
               if self.sock:
                   self.sock.close()
               self.sock = None
@@ -1386,18 +1396,35 @@ a string that contains the response entity body.
                     # to fix the non-existent bug not fixed in this
                     # bug report: http://mail.python.org/pipermail/python-bugs-list/2005-September/030289.html
                     try:
-                        info = self._cache_value_info_read(cached_value)
-                        content = cached_value
-                        feedparser = email.FeedParser.FeedParser()
-                        feedparser.feed(info)
-                        info = feedparser.close()
+                        info0 = self._cache_value_info_read(cached_value)
+                        fileLength = os.fstat(cached_value.fileno()).st_size
+
+                        content = cached_value                        
+                        info = info0.split("\n")
+
+                        msg = email.Message.Message()
+                        
+                        for l in info:
+                            if len(l) != 0:
+                                parts = l.split(": ", 1)
+                                if len(parts) > 1:
+                                    msg[parts[0]] = parts[1]
+
+                        info = msg
                         feedparser._parse = None
-                    except IndexError:
+
+                        totalLength = len(info0) + 4 + int(info['content-length'])
+                        if totalLength != fileLength:
+                            msg = "Invalid cache file %s : length should be %s, got %s" % (cachekey, totalLength, fileLength)
+                            report_error(msg)
+                            raise Exception(msg)
+                    except Exception, e:
                         self.cache.delete(cachekey)
                         cachekey = None
                         cached_value = None
             else:
                 cachekey = None
+
 
             if method in self.optimistic_concurrency_methods and self.cache and info.has_key('etag') and not self.ignore_etag and 'if-match' not in headers:
                 # http://www.w3.org/1999/04/Editing/
@@ -1416,15 +1443,27 @@ a string that contains the response entity body.
                     key = '-varied-%s' % header
                     value = info[key]
                     if headers.get(header, None) != value:
-                            cached_value = None
-                            break
+                        cached_value = None
+                        break
 
             if cached_value and method in ["GET", "HEAD"] and self.cache and 'range' not in headers:
-                if info.has_key('-x-permanent-redirect-url'):
+                entry_disposition = _entry_disposition(info, headers)
+
+                is_fresh_302 = info['status'] == "302" and entry_disposition == "FRESH"
+
+                is_permanent_redirect = info.has_key('-x-permanent-redirect-url')
+
+                if is_permanent_redirect or is_fresh_302:
+                    if is_permanent_redirect:
+                        url = info['-x-permanent-redirect-url']
+
+                    if is_fresh_302:
+                        url = info['location']
+
                     # Should cached permanent redirects be counted in our redirection count? For now, yes.
                     if redirections <= 0:
                       raise RedirectLimit("Redirected more times than rediection_limit allows.", {}, "")
-                    (response, new_content) = self.request(info['-x-permanent-redirect-url'], "GET", headers = headers, redirections = redirections - 1)
+                    (response, new_content) = self.request(url, "GET", headers = headers, redirections = redirections - 1)
                     response.previous = Response(info)
                     response.previous.fromcache = True
                 else:
@@ -1436,7 +1475,6 @@ a string that contains the response entity body.
                     # 1. [FRESH] Return the cache entry w/o doing a GET
                     # 2. [STALE] Do the GET (but add in cache validators if available)
                     # 3. [TRANSPARENT] Do a GET w/o any cache validators (Cache-Control: no-cache) on the request
-                    entry_disposition = _entry_disposition(info, headers)
 
                     if entry_disposition == "FRESH":
                         if not cached_value:

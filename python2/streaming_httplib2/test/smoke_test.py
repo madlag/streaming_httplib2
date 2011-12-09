@@ -1,9 +1,9 @@
 import os
 import unittest
 
-import stupeflix.webcache.streaming_httplib2 as httplib2
+import streaming_httplib2 as httplib2
 
-from stupeflix.webcache.streaming_httplib2.test import miniserver
+from streaming_httplib2.test import miniserver
 
 
 class HttpSmokeTest(unittest.TestCase):

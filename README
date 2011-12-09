@@ -10,7 +10,6 @@ The package can be installed throught pip:
 
  pip install streaming_httplib2
 
-
 A distributed cache class is available in dcache.py
 You can use it to create multi-process or even multi-machines 
 web cache (using distributed file systems like GlusterFS).
