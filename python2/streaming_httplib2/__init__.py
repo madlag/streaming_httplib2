@@ -43,7 +43,6 @@ import time
 import random
 import errno
 import logging
-import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -1154,6 +1153,7 @@ and more.
             try:
                 if conn.sock is None:
                   conn.connect()
+                
                 conn.request(method, request_uri, body, headers)
             except socket.timeout:
                 raise
@@ -1411,7 +1411,6 @@ a string that contains the response entity body.
                                     msg[parts[0]] = parts[1]
 
                         info = msg
-                        feedparser._parse = None
 
                         totalLength = len(info0) + 4 + int(info['content-length'])
                         if totalLength != fileLength:
