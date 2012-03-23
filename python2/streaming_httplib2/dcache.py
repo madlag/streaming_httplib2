@@ -295,6 +295,7 @@ class DistributedFileCache(httplib2.FileCache):
                 os.unlink(cache_full_path)
             except:
                 pass
+
             try:
                 if fd != None:
                     os.close(fd)
@@ -333,6 +334,3 @@ class DistributedFileCache(httplib2.FileCache):
         except:
             self.report_error("Unknown error removing file %s." % cache_full_path)
             raise
-            
-
-
