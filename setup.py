@@ -7,7 +7,7 @@ README = open(os.path.join(here, 'README')).read()
 NEWS = open(os.path.join(here, 'CHANGELOG')).read()
 
 
-version = '0.7.4'
+version = '0.7.5'
 
 install_requires = [
     # List your project dependencies here.

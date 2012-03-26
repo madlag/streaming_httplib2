@@ -46,6 +46,7 @@ import logging
 
 # Optional arguments to pass to alternative dns resolution libs like gevent.socket , mainly for QUERY_NO_SEARCH option
 SOCKET_GET_ADDR_INFO_ADD_ARGUMENTS={}
+SOCKET_FAMILY = 0
 
 logger = logging.getLogger(__name__)
 
@@ -794,7 +795,7 @@ class HTTPConnectionWithTimeout(httplib.HTTPConnection):
             raise ProxiesUnavailableError(
                 'Proxy support missing but proxy use was requested!')
         msg = "getaddrinfo returns an empty list"
-        for res in socket.getaddrinfo(self.host, self.port, 0,
+        for res in socket.getaddrinfo(self.host, self.port, SOCKET_FAMILY,
             socket.SOCK_STREAM, **SOCKET_GET_ADDR_INFO_ADD_ARGUMENTS):
             af, socktype, proto, canonname, sa = res
             try:
@@ -901,7 +902,7 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
 
         msg = "getaddrinfo returns an empty list"
         for family, socktype, proto, canonname, sockaddr in socket.getaddrinfo(
-            self.host, self.port, 0, socket.SOCK_STREAM):
+            self.host, self.port, SOCKET_FAMILY, socket.SOCK_STREAM, **SOCKET_GET_ADDR_INFO_ADD_ARGUMENTS):
             try:
                 if self.proxy_info and self.proxy_info.isgood():
                     sock = socks.socksocket(family, socktype, proto)
