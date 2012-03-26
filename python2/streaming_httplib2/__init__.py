@@ -44,7 +44,7 @@ import random
 import errno
 import logging
 
-# 
+# Optional arguments to pass to alternative dns resolution libs like gevent.socket , mainly for QUERY_NO_SEARCH option
 SOCKET_GET_ADDR_INFO_ADD_ARGUMENTS={}
 
 logger = logging.getLogger(__name__)
