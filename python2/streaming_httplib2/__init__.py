@@ -44,6 +44,9 @@ import random
 import errno
 import logging
 
+# 
+SOCKET_GET_ADDR_INFO_ADD_ARGUMENTS={}
+
 logger = logging.getLogger(__name__)
 
 def report_error(message, exc_info = True):
@@ -792,7 +795,7 @@ class HTTPConnectionWithTimeout(httplib.HTTPConnection):
                 'Proxy support missing but proxy use was requested!')
         msg = "getaddrinfo returns an empty list"
         for res in socket.getaddrinfo(self.host, self.port, 0,
-                socket.SOCK_STREAM):
+            socket.SOCK_STREAM, **SOCKET_GET_ADDR_INFO_ADD_ARGUMENTS):
             af, socktype, proto, canonname, sa = res
             try:
                 if self.proxy_info and self.proxy_info.isgood():
