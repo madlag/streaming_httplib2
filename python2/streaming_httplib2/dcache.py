@@ -28,14 +28,17 @@ a multi-machine web cache can be created easily.
 """
 
 
-def urlopen(url, cache_dir, path_schema = [(0,2), (2,4)], create_cache_dirs = False):
+def urlopen(url, cache_dir, path_schema = [(0,2), (2,4)], create_cache_dirs = False, user_agent = None):
     """Open a single url, a return the response info and content stream.
        For path_schema documentation, see below, in DistributedFileCache constructor.
        Be careful, ssl_certificate_validation is disactivated."""
     c = DistributedFileCache(cache_dir, path_schema = path_schema, 
             create = create_cache_dirs)
     h = httplib2.Http(c, disable_ssl_certificate_validation = True)
-    resp, content = h.request(url)
+    headers = {}
+    if user_agent != None:
+        headers["user-agent"] = user_agent
+    resp, content = h.request(url, headers = headers)
     c.cleanup()        
     return resp, content
 
