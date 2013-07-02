@@ -1,2 +1,3 @@
 include README
 include CHANGELOG
+include python2/streaming_httplib2/cacerts.txt
